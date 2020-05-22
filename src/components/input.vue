@@ -1,5 +1,5 @@
 <template>
-  <input type="text" :value="dataVal" @blur="handleBlur" />
+  <input type="text" :value="dataVal" @blur="handleBlur" @input="handleInput" />
 </template>
 <script>
 import emitMixin from "../mixins/setEmit";
@@ -14,18 +14,17 @@ export default {
   },
   data() {
     return {
-      dataVal: ""
+      dataVal: this.value
     };
-  },
-  watch: {
-    value(val) {
-      this.dataVal = val;
-    }
   },
   methods: {
     handleBlur() {
-      console.log(1111);
       this.dispatch("iFormItem", "on-form-blur", this.dataVal);
+    },
+    handleInput(event) {
+      const value = event.target.value;
+      this.dataVal = value;
+      this.$emit("input", value);
     }
   }
 };

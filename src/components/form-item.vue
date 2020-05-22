@@ -1,8 +1,8 @@
 <template>
   <div>
-    <label :class="{ 'i-form-item-label-required': isRequired }"
-      >{{ label }}
-    </label>
+    <label v-if="label" :class="{ 'i-form-item-label-required': isRequired }">{{
+      label
+    }}</label>
     <div>
       <slot></slot>
       <!-- 校验提示信息 -->
@@ -13,16 +13,16 @@
   </div>
 </template>
 <script>
-// import AsyncValidator from "async-validator";
+import AsyncValidator from "async-validator";
 import emitMixin from "../mixins/setEmit";
 export default {
   name: "iFormItem",
   mixins: [emitMixin],
-  //接受祖先组件的数据
   inject: ["form"],
   props: {
     label: {
-      type: String
+      type: String,
+      default: ""
     },
     prop: {
       type: String
@@ -35,52 +35,87 @@ export default {
       validateMessage: "" // 校验不通过时的提示信息
     };
   },
+  //通过计算属性动态获取到表单中的数据
   computed: {
     //由于prop的字段名和input双项数据绑定的字段名一样。
-    inputData() {
+    fieldValue() {
       return this.form.model[this.prop];
     }
   },
-  created() {
-    //通过$emit触发自定义事件，并且通过$on监听到事件触发，两者可以在同一个组件中使用。
-    this.$on("on-form-blur", this.onFieldBlur);
-  },
+
   methods: {
-    //必填项操作
+    //从校验规则获取必填规则标记出来
     setRules() {
       let rules = this.getRules();
-      if (rules.lenght) {
-        rules.forEach(element => {
-          //必填标记
-          this.isRequired = element.required;
+      console.log(rules, 1);
+      if (rules.length) {
+        rules.every(rule => {
+          // 如果当前校验规则中有必填项，则标记出来
+          this.isRequired = rule.required;
         });
       }
     },
-    // 从 Form 的 rules 属性中，获取当前 FormItem 的校验规则
+
+    // 从form中获取校验规则
     getRules() {
       let formRules = this.form.rules;
+      console.log(formRules, 0);
       formRules = formRules ? formRules[this.prop] : [];
+
       return [].concat(formRules || []);
     },
-    //过滤出符合要求的校验规则
-    getFilterRules(trigger) {
+    //过滤出blur的校验规则
+    getFilterRules(val) {
       const rules = this.getRules();
-      if (rules.lenght) {
-        rules.filter(
-          item => !item.trigger || item.trigger.indexOf(trigger) !== -1
-        );
-      }
+      return rules.filter(
+        item => !item.trigger || item.trigger.indexOf(val) !== -1
+      );
     },
-    //监听事件
+    validate(val, callback = function() {}) {
+      let rules = this.getFilterRules(val);
+      if (!rules || rules.lenght === 0) {
+        return false;
+      }
+      // 设置状态为校验中
+      this.validateState = "validating";
+      //创建一个校验规则对象
+      let descriptor = {};
+      descriptor[this.prop] = rules;
+      //创建要校验的数据对象
+      let model = {};
+      model[this.prop] = this.fieldValue;
+      const validator = new AsyncValidator(descriptor);
+      //当数据不符合校验规则时，在 validator.validate 的回调函数中，就可以得到相应的错误信息。
+      validator.validate(model, { firstFields: true }, errors => {
+        //根据errors判断校验状态
+        this.validateState = !errors ? "seccess" : "error";
+        this.validateMessage = errors ? errors[0].message : "";
+        callback(this.validateMessage);
+      });
+    },
+    //监听input失去焦点
     onFieldBlur() {
-      console.log(22222222);
+      this.validate("blur");
     }
+    //重置数据
+    //  resetField () {
+    //   this.validateState = '';
+    //   this.validateMessage = '';
 
-    //验证数据,  trigger:校验的类型, 参数2：回调函数
-    // validate(trigger, callback = function() {}) {
-    //   let rules = this.getFilterRules(trigger);
-    //   if (!rules || rules.lenght === 0) return false;
-    // }
+    //   this.form.model[this.prop] = this.initialValue;
+    // },
+  },
+  mounted() {
+    if (this.prop) {
+      //组件渲染时，将实例缓存到form中。
+      this.dispatch("iForm", "on-form-item-add", this);
+
+      // 设置初始值，以便在重置时恢复默认值
+      this.initialValue = this.fieldValue;
+    }
+    this.setRules();
+    //通过$emit触发自定义事件，并且通过$on监听到事件触发，两者可以在同一个组件中使用。
+    this.$on("on-form-blur", this.onFieldBlur);
   }
 };
 </script>
